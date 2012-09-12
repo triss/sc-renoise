@@ -59,7 +59,7 @@ or if you've tweaked the OSC settings in Renoise:
 
 	r = Renoise("127.0.0.1", 3333);
 
-Creating a Renoise Instruments for a SynthDef
+Creating a Renoise Instrument for a SynthDef
 ----------------------------------------------
 
 Define a SynthDef in the usual manner:
@@ -143,6 +143,7 @@ I'll also respond to queries on [sc-users][] or to mails sent directly
 to me at <tristan.strange@gmail.com>
 
 Cheers,
+
 Tristan
 
 [SuperCollider]: http://supercollider.sourceforge.net
