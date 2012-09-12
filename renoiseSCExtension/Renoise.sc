@@ -1,8 +1,9 @@
 Renoise {
 	var <ip, <port, <jackName;
-	var netAddr;
+	var <netAddr;
 	var usedMidiChannels;
-	var <>midiFunctions;
+	var <>midiOnFuncs, <>midiOffFuncs;
+	var <>monophonicSynths, <>polyphonicSynths;
 
 	*new { arg ip = "127.0.0.1", port = 8000, jackName = "renoise";
 		^super.newCopyArgs(ip, port, jackName).init;
@@ -10,8 +11,14 @@ Renoise {
 
 	init {
 		netAddr = NetAddr(ip, port);
+		
 		usedMidiChannels = 0;
-		midiFunctions = ();
+
+		midiOnFuncs = IdentityDictionary();
+		midiOffFuncs = IdentityDictionary();
+
+		monophonicSynths = IdentityDictionary();
+		polyphonicSynths = IdentityDictionary();
 	}
 
 	ip_ { arg newIp;
@@ -61,12 +68,22 @@ Renoise {
 		.sort;	
 	}
 
-	// make jack connection
+	// make jack connection between source and destination
+	//
+	// source - the name of a jack output port
+	// destonation - the name of a jack input port
+	//
+	// TODO: understand JACK Quark's method for doing this
+	//       and perhaps use it
 	jackConnect { arg source, destination;
 		("jack_connect" + source + destination).unixCmd;
 	}
 
-	// create midi instrument
+	// create midi instrument in Renoise song
+	//
+	// name - the name of instrument in Renoise
+	// midiOutChannel - midi channel that SC and Renoise instrument
+	//                  communication will take place on.
 	createMIDIInstrument { arg name, midiOutChannel;
 		this.evaluate(
 			// create an instrument
@@ -80,11 +97,14 @@ Renoise {
 		);
 	}
 
-	// add track with line in
-	addLineInTrack { arg input;
+	// add track with a line in device to Renoise song
+	//
+	// input - the input channel number the Line In device should be routing in.
+	addLineInTrack { arg input, name;
 		this.evaluate(
 			// create a track
 			"local t = renoise.song():insert_track_at(renoise.song().sequencer_track_count+1);" ++
+			"t.name = \"" ++ name ++ "\";" ++
 			// add a line in device to it
 			"local d = t:insert_device_at(\"Audio/Effects/Native/#Line Input\", 2);" ++
 			// route appropriate channel in to it.
@@ -98,56 +118,116 @@ Renoise {
 	// - set up new midi instrument in renoise
 	// - route audio in from SC to new track
 	// - set up appropriate midi routing in SC
-	createSynthDefInstrument { arg synthDef = "default";
+	createSynthDefInstrument { arg synthDefName = "default";
 		var unusedRenoiseInputLeft, unusedRenoiseInputRight, unusedRenoiseInputNo;
 		var unusedSCOutputLeft, unusedSCOutputRight, unusedSCOutputNo;
+		var synthDesc;
 
-		// create and route midi instrument in renoise
-		usedMidiChannels = usedMidiChannels + 1;
-		
-		this.createMIDIInstrument(synthDef, usedMidiChannels);
+		synthDesc = SynthDescLib.global[synthDefName];
 
-		// find pair of renoise inputs
-		unusedRenoiseInputLeft = this.getFreeRenoiseInputs[0];
-		unusedRenoiseInputRight = this.getFreeRenoiseInputs[1];
+		if(synthDesc.notNil) {
+			// create and route midi instrument in renoise
+			usedMidiChannels = usedMidiChannels + 1;
+			
+			this.createMIDIInstrument(synthDefName, usedMidiChannels);
 
-		// get pairs number
-		unusedRenoiseInputNo = unusedRenoiseInputLeft
-		.asString
-		.findRegexp("[0-9]+")[0][1]
-		.asInt - 1;
+			// find pair of renoise inputs
+			unusedRenoiseInputLeft = this.getFreeRenoiseInputs[0];
+			unusedRenoiseInputRight = this.getFreeRenoiseInputs[1];
 
-		// route audio in to renoise
-		this.addLineInTrack(unusedRenoiseInputNo);
+			// get pairs number
+			unusedRenoiseInputNo = unusedRenoiseInputLeft
+			.asString
+			.findRegexp("[0-9]+")[0][1]
+			.asInt - 1;
 
-		// find unused SC ourputs
-		unusedSCOutputLeft = this.getFreeSCOutputs[0];
-		unusedSCOutputRight = this.getFreeSCOutputs[1];
+			// get pair of SC outputs
+			unusedSCOutputLeft = this.getFreeSCOutputs[0];
+			unusedSCOutputRight = this.getFreeSCOutputs[1];
 
-		unusedSCOutputNo = unusedSCOutputLeft
-		.asString
-		.findRegexp("[0-9]+")[0][1]
-		.asInt - 1;
+			// get output number
+			unusedSCOutputNo = unusedSCOutputLeft
+			.asString
+			.findRegexp("[0-9]+")[0][1]
+			.asInt - 1;
 
-		// if synth def is mono
-		if(SynthDescLib.global[synthDef].outputs[0].numberOfChannels == 1) {
-			// route 1 SC output to 2 renoise inputs
-			this.jackConnect(unusedSCOutputLeft, unusedRenoiseInputLeft);
-			this.jackConnect(unusedSCOutputLeft, unusedRenoiseInputRight);
+			// route audio in to renoise
+			this.addLineInTrack(unusedRenoiseInputNo, synthDefName);
+
+			// if synth def is mono
+			if(synthDesc.outputs[0].numberOfChannels == 1) {
+				// route 1 SC output to 2 renoise inputs
+				// TODO: Understand how to L+R -> L on #Line Input device
+				//       and only use one of Renoise's free inputs.
+				this.jackConnect(unusedSCOutputLeft, unusedRenoiseInputLeft);
+				this.jackConnect(unusedSCOutputLeft, unusedRenoiseInputRight);
+			} {
+				// else route 2 SC outputs to 2 renoise inputs
+				this.jackConnect(unusedSCOutputLeft, unusedRenoiseInputLeft);
+				this.jackConnect(unusedSCOutputRight, unusedRenoiseInputRight);
+			};
+			
+			// create required MIDI responders and synths required to handle 
+			// different types of SynthDef.
+			if(synthDesc.hasGate) {
+				if(synthDesc.canFreeSynth) {
+					// wrap gated polyphonic synth
+					polyphonicSynths.put(synthDefName, { nil } ! 128);
+					
+					midiOnFuncs.put(synthDefName,
+						MIDIFunc.noteOn({ |velocity, note| 
+							polyphonicSynths[synthDefName][note] = Synth(synthDefName, [
+								\gate, 1,
+								\freq, note.midicps, 
+								\amp, velocity / 127.0, 
+								\out, unusedSCOutputNo]) 
+						}, nil, usedMidiChannels - 1);
+					);
+
+					midiOffFuncs.put(synthDefName,
+						MIDIFunc.noteOff({ |velocity, note| 
+							polyphonicSynths[synthDefName][note].set(\gate, 0);
+						}, nil, usedMidiChannels - 1)
+					);
+				} {
+					// wrap gated monophonic synth
+					monophonicSynths.put(synthDefName, Synth(synthDefName));
+
+					midiOnFuncs.put(synthDefName, 
+						MIDIFunc.noteOn({ |velocity, note| 
+							monophonicSynths[synthDefName].set(
+								\freq, note.midicps,
+								\amp, velocity / 127.0, 
+								\out, unusedSCOutputNo,
+								\gate, 1);
+						}, nil, usedMidiChannels - 1)
+					);
+
+					midiOffFuncs.put(synthDefName,
+						MIDIFunc.noteOff({ |velocity, note| 
+							monophonicSynths[synthDefName].set(\gate, 0);
+						}, nil, usedMidiChannels - 1)
+					);		
+				}
+			} {
+				// wrap "percussive" polyphonic synth - synth with no gate 
+				midiOnFuncs.put(synthDefName, 
+					MIDIFunc.noteOn({ |velocity, note| 
+						Synth(synthDefName, [
+							\freq, note.midicps, 
+							\amp, velocity / 127.0, 
+							\out, unusedSCOutputNo]) 
+					}, nil, usedMidiChannels - 1);
+				);
+			}
 		} {
-			// else route 2 SC output to 2 renoise inputs
-			this.jackConnect(unusedSCOutputLeft, unusedRenoiseInputLeft);
-			this.jackConnect(unusedSCOutputRight, unusedRenoiseInputRight);
-		};
-		
-		midiFunctions.put(synthDef, 
-			MIDIFunc.noteOn({ |velocity, note| 
-				Synth(synthDef, [\freq, note.midicps, \amp, velocity / 127.0, \out, unusedSCOutputNo]) 
-			}, nil, usedMidiChannels - 1);
-		);
+			("SynthDef" + synthDefName + "does not exist.").error;
+		}
 	}
 
-	// standard renoise OSC messages
+	// -----------------------------
+	// Standard renoise OSC messages
+	// -----------------------------
 
 	// Evaluate a custom Lua expression,
 	evaluate { arg luaExpression;
@@ -340,7 +420,7 @@ Renoise {
 
 	// Set parameter value of an device [0 - 1]
 	// device is the device index, -1 the currently selected device
-	setDeviceParameterByIndex { arg track, device, parameter, value;
+	setDeviceParameter { arg track, device, parameter, value;
 		netAddr.sendMsg(
 			"/renoise/song/track/" ++ track 
 			++ "/device/" ++ device 
