@@ -151,5 +151,5 @@ Tristan
 [Using Quarks]: http://doc.sccode.org/Guides/UsingQuarks.html
 [OSC commands]:	http://tutorials.renoise.com/wiki/Open_Sound_Control
 [OSC communication]: http://tutorials.renoise.com/wiki/Open_Sound_Control
-[Renoise.sc]: /triss/sc-renoise/renoiseSCExtension/Renoise.sc
+[Renoise.sc]: https://github.com/triss/sc-renoise/blob/master/renoiseSCExtension/Renoise.sc
 [sc-users]: http://new-supercollider-mailing-lists-forums-use-these.2681727.n2.nabble.com/SuperCollider-Users-New-Use-this-f2676391.html
