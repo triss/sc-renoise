@@ -121,9 +121,9 @@ Change a device parameter's value:
 	// set track: 1, device: 4, parameter: 3 to 0.5
 	r.setDeviceParameter(1, 4, 3, 0.5);
 	
-Play Renoise Instruments
+Play Renoise Instruments:
 
-v	// play instrument 1 on track 1 with note 64, velocity 111
+	// play instrument 1 on track 1 with note 64, velocity 111
 	r.noteOn(1, 1, 64, 111)
 	// turn off note
 	r.noteOff(1, 1, 64)
