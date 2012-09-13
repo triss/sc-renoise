@@ -1,7 +1,9 @@
 Renoise {
 	var <ip, <port, <jackName;
 	var <netAddr;
-	var usedMidiChannels;
+
+	var usedMidiChannels, usedMidiPorts;
+	
 	var <>midiOnFuncs, <>midiOffFuncs;
 	var <>monophonicSynths, <>polyphonicSynths;
 
@@ -114,57 +116,96 @@ Renoise {
 		);
 	}
 
+	// return's a dictionary containing information about the next free set of
+	// renoise inputs.
+	getNextFreeRenoiseInput {
+		var freeInputs, nextFreeInput;
+
+		nextFreeInput = IdentityDictionary();
+
+		// find a free pair of renoise inputs
+		freeInputs = this.getFreeRenoiseInputs();
+
+		freeInputs.size.postln;
+		if(freeInputs.size < 2) { 
+			"Renoise has no more free inputs".throw;
+		};
+
+		nextFreeInput.put(\left, freeInputs[0]);
+		nextFreeInput.put(\right, freeInputs[1]);
+
+		// findpairs index as referenced by Line Input in Renoise
+		nextFreeInput.put(\number,  
+			freeInputs[0]
+			.asString
+			.findRegexp("[0-9]+")[0][1]
+			.asInt - 1
+		);
+
+		^nextFreeInput;
+	}
+
+	// return's a dictionary containing information about the next free set of
+	// SuperCollider outputs.
+	getNextFreeSCOutput {
+		var freeOutputs, nextFreeOutput;
+
+		nextFreeOutput = IdentityDictionary();
+
+		// get pair of SC outputs
+		freeOutputs = this.getFreeSCOutputs();
+
+		// 2 currently as we aren't dealing with mono/stereo as
+		// nicely as we could be yet
+		if(freeOutputs.size < 2) { 
+			"SuperCollider has no more free outputs".throw;
+		};
+
+		nextFreeOutput.put(\left, freeOutputs[0]);
+		nextFreeOutput.put(\right, freeOutputs[1]);
+
+		// find output number that correspond's to above SC outputs.
+		nextFreeOutput.put(\number, 
+			freeOutputs[0]
+			.asString
+			.findRegexp("[0-9]+")[0][1]
+			.asInt - 1
+		);
+		
+		^nextFreeOutput;
+	}
+
 	// wrap synth def in renoise instrument
 	// - set up new midi instrument in renoise
 	// - route audio in from SC to new track
 	// - set up appropriate midi routing in SC
 	createSynthDefInstrument { arg synthDefName = "default";
-		var unusedRenoiseInputLeft, unusedRenoiseInputRight, unusedRenoiseInputNo;
-		var unusedSCOutputLeft, unusedSCOutputRight, unusedSCOutputNo;
-		var synthDesc;
+		var renoiseInput, scOutput, synthDesc;
 
 		synthDesc = SynthDescLib.global[synthDefName];
 
 		if(synthDesc.notNil) {
+			renoiseInput = this.getNextFreeRenoiseInput();
+			scOutput = this.getNextFreeSCOutput();
+
 			// create and route midi instrument in renoise
 			usedMidiChannels = usedMidiChannels + 1;
-			
 			this.createMIDIInstrument(synthDefName, usedMidiChannels);
 
-			// find pair of renoise inputs
-			unusedRenoiseInputLeft = this.getFreeRenoiseInputs[0];
-			unusedRenoiseInputRight = this.getFreeRenoiseInputs[1];
-
-			// get pairs number
-			unusedRenoiseInputNo = unusedRenoiseInputLeft
-			.asString
-			.findRegexp("[0-9]+")[0][1]
-			.asInt - 1;
-
-			// get pair of SC outputs
-			unusedSCOutputLeft = this.getFreeSCOutputs[0];
-			unusedSCOutputRight = this.getFreeSCOutputs[1];
-
-			// get output number
-			unusedSCOutputNo = unusedSCOutputLeft
-			.asString
-			.findRegexp("[0-9]+")[0][1]
-			.asInt - 1;
-
 			// route audio in to renoise
-			this.addLineInTrack(unusedRenoiseInputNo, synthDefName);
+			this.addLineInTrack(renoiseInput[\number], synthDefName);
 
 			// if synth def is mono
 			if(synthDesc.outputs[0].numberOfChannels == 1) {
 				// route 1 SC output to 2 renoise inputs
-				// TODO: Understand how to L+R -> L on #Line Input device
-				//       and only use one of Renoise's free inputs.
-				this.jackConnect(unusedSCOutputLeft, unusedRenoiseInputLeft);
-				this.jackConnect(unusedSCOutputLeft, unusedRenoiseInputRight);
+				// TODO: Understand how to set L+R -> L on #Line Input
+				//       device and only use one of Renoise's free inputs.
+				this.jackConnect(scOutput[\left], renoiseInput[\left]);
+				this.jackConnect(scOutput[\left], renoiseInput[\right]);
 			} {
 				// else route 2 SC outputs to 2 renoise inputs
-				this.jackConnect(unusedSCOutputLeft, unusedRenoiseInputLeft);
-				this.jackConnect(unusedSCOutputRight, unusedRenoiseInputRight);
+				this.jackConnect(scOutput[\left], renoiseInput[\left]);
+				this.jackConnect(scOutput[\right], renoiseInput[\right]);
 			};
 			
 			// create required MIDI responders and synths required to handle 
@@ -180,7 +221,7 @@ Renoise {
 								\gate, 1,
 								\freq, note.midicps, 
 								\amp, velocity / 127.0, 
-								\out, unusedSCOutputNo]) 
+								\out, scOutput[\number]]) 
 						}, nil, usedMidiChannels - 1);
 					);
 
@@ -198,7 +239,7 @@ Renoise {
 							monophonicSynths[synthDefName].set(
 								\freq, note.midicps,
 								\amp, velocity / 127.0, 
-								\out, unusedSCOutputNo,
+								\out, scOutput[\number],
 								\gate, 1);
 						}, nil, usedMidiChannels - 1)
 					);
@@ -216,12 +257,12 @@ Renoise {
 						Synth(synthDefName, [
 							\freq, note.midicps, 
 							\amp, velocity / 127.0, 
-							\out, unusedSCOutputNo]) 
+							\out, scOutput[\number]]) 
 					}, nil, usedMidiChannels - 1);
 				);
 			}
 		} {
-			("SynthDef" + synthDefName + "does not exist.").error;
+			("SynthDef" + synthDefName + "does not exist.").throw;
 		}
 	}
 
