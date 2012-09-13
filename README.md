@@ -66,7 +66,7 @@ Define a SynthDef in the usual manner:
 	
 	(
 	SynthDef(\sound, { |out = 0, gate = 1, freq = 440, amp = 0.5|
-		var sig, env, gate;
+		var sig, env;
 
 		env = EnvGen.kr(Env.adsr(0.01, 0.9, 0.3, 1), gate, doneAction: 2);
 
@@ -86,7 +86,7 @@ can now be played/recorded/fx'd like any other Renoise instrument.
 \sound Synths are now being triggered by MIDI notes coming from Renoise, with 
 it's parameters mapped as follows:
 
-*	MIDI note 			-> freq
+*	MIDI note 		-> freq
 *	MIDI velocity 		-> amp
 *	MIDI note on/off 	-> gate
 
