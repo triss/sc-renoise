@@ -1,56 +1,43 @@
-sc - renoise
-============
+# sc - renoise
+[SuperCollider][] and [Renoise][] extensions that allow integration of the two tools. 
 
-[SuperCollider][] and [Renoise][] extensions that allow better 
-integration between the two tools. 
-
-Status
-------
-
+## Status
 Currently only a single part of the SC extension exists. The class 
 does two things currently: 
 
-*	Map a Renoise MIDI Instrument to a SynthDef such that it can be
-	played/recorded etc. in the manner of any other Renoise 
-	instrument or external synthesiser with a single command.
-
+*	Maps SynthDef's to Renoise instruments such that they can be 	sequenced/played/recorded in the manner of any other Renoise 	instrument.
+	
 *	Provides quick access to all of Renoise's [OSC commands][]
 
-Although this code is functional note that this is work in progress, 
-is likely to change significantly and should be considered only as 
-a proof of concept currently.
+Although this code is functional you should note that this is work in progress and is likely to change significantly.
 
 It's only been tested on Linux with Jack installed.
 
-Setting Up
-----------
-
+## Setting Up
+### SuperCollider
 *	This class requires the JACK Quark to be present. See
 	[Using Quarks][] in the Help if you aren't sure how to install
  	this. 
 
-*	The [Renoise.sc][] file you can grab here needs to be copied in 
-	to your SC Extension's folder.
-
-	You can find its location by executing the following in SC: 
+*	Copy [Renoise.sc][] in to your SC Extension's folder. You can find 	its location by executing the following in SC: 
 
 		Platform.userExtensionDir; 
 
-*	Restart SC and Start Renoise. 
+*	SC now needs to be restarted
 
-*	Both Renoise and SC need to be configured to use Jack for audio
-	routing.
+### Renoise
+*	Renoise needs to be set up to use Jack Audio in it's 	[Audio Preferences][] with at least 4 (preferably more) input 	channel's. 
 
 *	[OSC communication][] needs to be turned on in Renoise.
 
-*	Boot the server and connect MIDI input in SC:
+## Use
+### Preparing SuperCollider
+Boot the server and connect MIDI inputs to SC:
 
-		s.boot;
-		MIDIIn.connectAll;
+	s.boot;
+	MIDIIn.connectAll;
 
-Using the Renoise class in SuperCollider
-----------------------------------------
-
+### Using the Renoise class in SuperCollider
 Create a Renoise object:
 
 	r = Renoise();
@@ -59,9 +46,7 @@ or if you've tweaked the OSC settings in Renoise:
 
 	r = Renoise("127.0.0.1", 3333);
 
-Creating a Renoise Instrument for a SynthDef
-----------------------------------------------
-
+### Creating a Renoise Instrument for a SynthDef
 Define a SynthDef in the usual manner:
 	
 	(
@@ -80,32 +65,24 @@ Then create a Renoise instrument and have it wired up to the SynthDef like so:
 
 	r.createSynthDefInstrument(\sound)
 	
-Switch over to Renoise and trigger the SynthDef by playing the keyboard. This 
-can now be played/recorded/fx'd like any other Renoise instrument.
+Switch over to Renoise and trigger the SynthDef by playing the keyboard. This can now be sequenced/played/recorded like any other Renoise instrument.
 
-\sound Synths are now being triggered by MIDI notes coming from Renoise, with 
-it's parameters mapped as follows:
+#### How the SynthDef mapping worked
+\sound Synths are now being triggered by MIDI notes coming from Renoise, with it's parameters mapped as follows:
 
-*	MIDI note 		-> freq
+*	MIDI note 			-> freq
 *	MIDI velocity 		-> amp
 *	MIDI note on/off 	-> gate
 
-The out argument of the SynthDef was automatically set to appropriate SC 
-output which is routed in to Renoise via a Line Input device.
+The out argument of the SynthDef was automatically set an appropriate SC output which is routed into Renoise via a Line Input device.
 
-The .createSynthDefInstrument() method is clever/presumptuous enough to 
-detect if a SynthDef should be played monophonicly or polyphonicly and also 
-deals with mono/stereo SynthDefs sensibly.
+The .createSynthDefInstrument() method is clever/presumptuous enough to detect if a SynthDef should be played monophonicly or polyphonicly and also deals with mono/stereo SynthDefs sensibly.
 
-A single Synth will be created if the SynthDef passed in doesn't free itself
-(has no doneAction) and it's parameters changed each time a note comes in.
+If the SynthDef passed in does free itself it will be set up such thatmultiple Synths are created and can be played polyphonicly.
 
-If the SynthDef passed in does free itself it will be set up such that 
-multiple Synths are created and can be played polyphonicly.
+A single Synth will be created if the SynthDef passed in doesn't free itself (has no doneAction) and it's parameters changed each time a note comes in. i.e. it is played in a monophonic fashion.
 
-Manipulating Renoise
---------------------
-
+### Manipulating Renoise
 Now set up Renoise's bpm and start and stop it playing:
 
 	r.bpm = 128;
@@ -129,13 +106,9 @@ Play Renoise Instruments:
 	r.noteOff(1, 1, 64)
 
 All of Renoise's [OSC commands][] have convenience methods similar to 
-those above. You'll need to refer to the "Standard renoise OSC messages" 
-section of [Renoise.sc][] to find them for now, they won't be documented 
-properly for a few days yet.
+those above. You'll need to refer to the "Standard renoise OSC messages" section of [Renoise.sc][] to find them for now, they won't be documented properly for a few days yet.
 
-Contact
--------
-
+## Contact Details
 It'd be much appreciated if you could log questions, bugs and feature 
 requests here: <https://github.com/triss/sc-renoise/issues>
 
@@ -151,5 +124,6 @@ Tristan
 [Using Quarks]: http://doc.sccode.org/Guides/UsingQuarks.html
 [OSC commands]:	http://tutorials.renoise.com/wiki/Open_Sound_Control
 [OSC communication]: http://tutorials.renoise.com/wiki/Open_Sound_Control
+[Audio Preferences]: http://tutorials.renoise.com/wiki/Preferences#Audio
 [Renoise.sc]: https://github.com/triss/sc-renoise/blob/master/renoiseSCExtension/Renoise.sc
 [sc-users]: http://new-supercollider-mailing-lists-forums-use-these.2681727.n2.nabble.com/SuperCollider-Users-New-Use-this-f2676391.html
