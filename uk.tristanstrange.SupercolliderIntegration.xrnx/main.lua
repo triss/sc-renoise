@@ -28,7 +28,7 @@ local tool_id = manifest:property("Id").value
 local options = renoise.Document.create("SuperColliderIntegrationPreferences") {
   sclang_host = "localhost",
   sclang_port = 57120
-d}
+}
 
 renoise.tool().preferences = options
 
