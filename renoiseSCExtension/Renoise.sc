@@ -1,5 +1,5 @@
 Renoise {
-	var <ip, <port, <jackName;
+	var <ip, <port, <>jackName;
 	var <netAddr;
 
 	var usedMidiChannels, usedMidiPorts;
