@@ -193,11 +193,67 @@ Renoise {
 		};
 	}
 
+	createRequiredMidiRespondersAndSynths { arg synthDefName, synthDesc, scOutput;
+		// create required MIDI responders and synths required to handle 
+		// different types of SynthDef.
+		if(synthDesc.hasGate) {
+			if(synthDesc.canFreeSynth) {
+				// wrap gated polyphonic synth
+				polyphonicSynths.put(synthDefName, { nil } ! 128);
+				
+				midiOnFuncs.put(synthDefName,
+					MIDIFunc.noteOn({ |velocity, note| 
+						polyphonicSynths[synthDefName][note] = Synth(synthDefName, [
+							\gate, 1,
+							\freq, note.midicps, 
+							\amp, velocity / 127.0, 
+							\out, scOutput[\number]]) 
+					}, nil, usedMidiChannels - 1);
+				);
+
+				midiOffFuncs.put(synthDefName,
+					MIDIFunc.noteOff({ |velocity, note| 
+						polyphonicSynths[synthDefName][note].set(\gate, 0);
+					}, nil, usedMidiChannels - 1)
+				);
+			} {
+				// wrap gated monophonic synth
+				monophonicSynths.put(synthDefName, Synth(synthDefName));
+
+				midiOnFuncs.put(synthDefName, 
+					MIDIFunc.noteOn({ |velocity, note| 
+						monophonicSynths[synthDefName].set(
+							\freq, note.midicps,
+							\amp, velocity / 127.0, 
+							\out, scOutput[\number],
+							\gate, 1);
+					}, nil, usedMidiChannels - 1)
+				);
+
+				midiOffFuncs.put(synthDefName,
+					MIDIFunc.noteOff({ |velocity, note| 
+						monophonicSynths[synthDefName].set(\gate, 0);
+					}, nil, usedMidiChannels - 1)
+				);		
+			}
+		} {
+			// wrap "percussive" polyphonic synth - synth with no gate 
+			midiOnFuncs.put(synthDefName, 
+				MIDIFunc.noteOn({ |velocity, note| 
+					Synth(synthDefName, [
+						\freq, note.midicps, 
+						\amp, velocity / 127.0, 
+						\out, scOutput[\number]]) 
+				}, nil, usedMidiChannels - 1);
+			);
+		}
+	}
+
 	// wrap synth def in renoise instrument
 	// - set up new midi instrument in renoise
 	// - route audio in from SC to new track
 	// - set up appropriate midi routing in SC
-	createSynthDefInstrument { arg synthDefName = "default";
+	createSynthDefInstrument { arg synthDefName;
 		var renoiseInput, scOutput, synthDesc;
 
 		synthDesc = SynthDescLib.global[synthDefName];
@@ -214,59 +270,8 @@ Renoise {
 			this.addLineInTrack(renoiseInput[\number], synthDefName);
 			this.makeJackConnectionForSynthDesc(synthDesc, scOutput, renoiseInput);
 			
-			// create required MIDI responders and synths required to handle 
-			// different types of SynthDef.
-			if(synthDesc.hasGate) {
-				if(synthDesc.canFreeSynth) {
-					// wrap gated polyphonic synth
-					polyphonicSynths.put(synthDefName, { nil } ! 128);
-					
-					midiOnFuncs.put(synthDefName,
-						MIDIFunc.noteOn({ |velocity, note| 
-							polyphonicSynths[synthDefName][note] = Synth(synthDefName, [
-								\gate, 1,
-								\freq, note.midicps, 
-								\amp, velocity / 127.0, 
-								\out, scOutput[\number]]) 
-						}, nil, usedMidiChannels - 1);
-					);
-
-					midiOffFuncs.put(synthDefName,
-						MIDIFunc.noteOff({ |velocity, note| 
-							polyphonicSynths[synthDefName][note].set(\gate, 0);
-						}, nil, usedMidiChannels - 1)
-					);
-				} {
-					// wrap gated monophonic synth
-					monophonicSynths.put(synthDefName, Synth(synthDefName));
-
-					midiOnFuncs.put(synthDefName, 
-						MIDIFunc.noteOn({ |velocity, note| 
-							monophonicSynths[synthDefName].set(
-								\freq, note.midicps,
-								\amp, velocity / 127.0, 
-								\out, scOutput[\number],
-								\gate, 1);
-						}, nil, usedMidiChannels - 1)
-					);
-
-					midiOffFuncs.put(synthDefName,
-						MIDIFunc.noteOff({ |velocity, note| 
-							monophonicSynths[synthDefName].set(\gate, 0);
-						}, nil, usedMidiChannels - 1)
-					);		
-				}
-			} {
-				// wrap "percussive" polyphonic synth - synth with no gate 
-				midiOnFuncs.put(synthDefName, 
-					MIDIFunc.noteOn({ |velocity, note| 
-						Synth(synthDefName, [
-							\freq, note.midicps, 
-							\amp, velocity / 127.0, 
-							\out, scOutput[\number]]) 
-					}, nil, usedMidiChannels - 1);
-				);
-			}
+			// create required Midi responders and synths
+			this.createRequiredMidiRespondersAndSynths(synthDefName, synthDesc, scOutput);
 		} {
 			("SynthDef" + synthDefName + "does not exist.").throw;
 		}
