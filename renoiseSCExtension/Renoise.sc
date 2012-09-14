@@ -175,6 +175,21 @@ Renoise {
 		^nextFreeOutput;
 	}
 
+	makeJackConnectionForSynthDesc { arg synthDesc, scOutput, renoiseInput;
+		// if synth def is mono
+		if(synthDesc.outputs[0].numberOfChannels == 1) {
+			// route 1 SC output to 2 renoise inputs
+			// TODO: Understand how to set L+R -> L on #Line Input
+			//       device and only use one of Renoise's free inputs.
+			this.jackConnect(scOutput[\left], renoiseInput[\left]);
+			this.jackConnect(scOutput[\left], renoiseInput[\right]);
+		} {
+			// else route 2 SC outputs to 2 renoise inputs
+			this.jackConnect(scOutput[\left], renoiseInput[\left]);
+			this.jackConnect(scOutput[\right], renoiseInput[\right]);
+		};
+	}
+
 	// wrap synth def in renoise instrument
 	// - set up new midi instrument in renoise
 	// - route audio in from SC to new track
@@ -194,19 +209,7 @@ Renoise {
 
 			// route audio in to renoise
 			this.addLineInTrack(renoiseInput[\number], synthDefName);
-
-			// if synth def is mono
-			if(synthDesc.outputs[0].numberOfChannels == 1) {
-				// route 1 SC output to 2 renoise inputs
-				// TODO: Understand how to set L+R -> L on #Line Input
-				//       device and only use one of Renoise's free inputs.
-				this.jackConnect(scOutput[\left], renoiseInput[\left]);
-				this.jackConnect(scOutput[\left], renoiseInput[\right]);
-			} {
-				// else route 2 SC outputs to 2 renoise inputs
-				this.jackConnect(scOutput[\left], renoiseInput[\left]);
-				this.jackConnect(scOutput[\right], renoiseInput[\right]);
-			};
+			this.makeJackConnectionForSynthDesc(synthDesc, scOutput, renoiseInput);
 			
 			// create required MIDI responders and synths required to handle 
 			// different types of SynthDef.
