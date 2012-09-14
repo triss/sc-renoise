@@ -104,15 +104,18 @@ Renoise {
 	// input - the input channel number the Line In device should be routing in.
 	addLineInTrack { arg input, name;
 		this.evaluate(
+			// find new number for track
+			"local n = renoise.song().sequencer_track_count+1;" ++
 			// create a track
-			"local t = renoise.song():insert_track_at(renoise.song().sequencer_track_count+1);" ++
+			"local t = renoise.song():insert_track_at(n);" ++
 			"t.name = \"" ++ name ++ "\";" ++
 			// add a line in device to it
 			"local d = t:insert_device_at(\"Audio/Effects/Native/#Line Input\", 2);" ++
 			// route appropriate channel in to it.
 			"d.active_preset_data = string.gsub(d.active_preset_data, " ++
 			"\"<InputChannel>0</InputChannel>\"," ++
-			"\"<InputChannel>" ++ input ++ "</InputChannel>\");"
+			"\"<InputChannel>" ++ input ++ "</InputChannel>\");" ++
+			"renoise.song().selected_track_index = n;"
 		);
 	}
 
